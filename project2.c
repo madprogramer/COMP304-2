@@ -49,16 +49,22 @@ int pthread_sleep (int seconds)
 }
 
 void moderate(void * arg) {
-    printf("%s\n", "Let the discussion begin");
+    printf("Moderator asks question %d\n",(int *)arg);
+    //QUESTION ASKED SIGNAL!
+
+    //Wait for answers
 }
 void commentate(void * arg) {
     //TODO: Position in Queue
+
+    //WAIT
+    //WAKE UP
     printf("Commentator #%d generates answer, position in queue: 0\n",(int *)arg);
+    //DIE
 } 
 int main(int argc, char *argv[]){
 
   //Init
-  //Get Commentator Count
   int N=0,Q=0;
   double T=0,P=0;
 
@@ -78,14 +84,6 @@ int main(int argc, char *argv[]){
         sscanf(argv[CURARG+1], "%lf", &P);
     }
 
-    //printf("N:%d, Q:%d, T:%lf, P:%lf\n", N,Q,T,P );
-    return 0;
-
-    //sscanf(argv[1], "%d", &N);
-    //sscanf(argv[1], "%d", &N);
-    //sscanf(argv[1], "%d", &N);
-    //sscanf(argv[1], "%d", &N);
-
   }
   else{
     printf("Error: Missing count of commentators!\n");
@@ -93,17 +91,18 @@ int main(int argc, char *argv[]){
   }
 
   //Panel
-  int t =0;
-  while(1) {
-    pthread_create(&moderator, NULL, moderate, "moderator");
-    for (t=1;t<=N;t++){
-      pthread_create(&commentator[t], NULL, commentate, t);
+  int n, q;
+  for(q=1;q<=Q;q++) {
+
+    pthread_create(&moderator, NULL, moderate, q);
+    for (n=1;n<=N;n++){
+      pthread_create(&commentator[n], NULL, commentate, n);
     }
 
-    pthread_join(moderator, NULL);
-    for (t=1;t<=N;t++){
-      pthread_join(commentator[t], NULL);
+    for (n=1;n<=N;n++){
+      pthread_join(commentator[n], NULL);
     }
+    pthread_join(moderator, NULL);
   }
 
   return 0;
