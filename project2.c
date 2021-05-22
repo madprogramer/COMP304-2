@@ -6,6 +6,7 @@
 #define NULL  __DARWIN_NULL
 #define __DARWIN_NULL ((void *)0)
 #define MAXCOMMENTATORS 400
+#define CURARG 1+2*i
  /****************************************************************************** 
   pthread_sleep takes an integer number of seconds to pause the current thread 
   original by Yingwu Zhu
@@ -14,15 +15,15 @@
 
 pthread_t moderator;
 pthread_t commentator[MAXCOMMENTATORS];
-pthread_mutex_t mutex;
+/*pthread_mutex_t mutex;
 pthread_cond_t conditionvar;
-struct timespec timetoexpire;
+struct timespec timetoexpire;*/
 
 int pthread_sleep (int seconds)
 {
-   /*pthread_mutex_t mutex;
+   pthread_mutex_t mutex;
    pthread_cond_t conditionvar;
-   struct timespec timetoexpire;*/
+   struct timespec timetoexpire;
    if(pthread_mutex_init(&mutex,NULL))
     {
       return -1;
@@ -58,11 +59,33 @@ int main(int argc, char *argv[]){
 
   //Init
   //Get Commentator Count
-  int N;
+  int N=0,Q=0;
+  double T=0,P=0;
 
-  if( argc == 2 ) {
-      printf("The argument supplied is %s\n", argv[1]);
-      sscanf(argv[1], "%d", &N);
+  if( argc == 9 ) {
+
+    //Parse Arguments
+    int i=0;
+    for(;i<4;i++){
+      if(!strcmp(argv[CURARG], "-n"))
+        sscanf(argv[CURARG+1], "%d", &N);
+      if(!strcmp(argv[CURARG], "-q"))
+        sscanf(argv[CURARG+1], "%d", &Q);
+      if(!strcmp(argv[CURARG], "-t"))
+        sscanf(argv[CURARG+1], "%lf", &T);
+      if(!strcmp(argv[CURARG], "-p"))
+        //printf("%s\n", argv[CURARG+1]);
+        sscanf(argv[CURARG+1], "%lf", &P);
+    }
+
+    //printf("N:%d, Q:%d, T:%lf, P:%lf\n", N,Q,T,P );
+    return 0;
+
+    //sscanf(argv[1], "%d", &N);
+    //sscanf(argv[1], "%d", &N);
+    //sscanf(argv[1], "%d", &N);
+    //sscanf(argv[1], "%d", &N);
+
   }
   else{
     printf("Error: Missing count of commentators!\n");
