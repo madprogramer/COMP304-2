@@ -5,7 +5,7 @@
 #include <time.h>
 #define NULL  __DARWIN_NULL
 #define __DARWIN_NULL ((void *)0)
-#define MAXCOMMENTATORS 100
+#define MAXCOMMENTATORS 400
  /****************************************************************************** 
   pthread_sleep takes an integer number of seconds to pause the current thread 
   original by Yingwu Zhu
@@ -47,15 +47,17 @@ int pthread_sleep (int seconds)
 
 }
 
-void moderate() {
+void moderate(void * arg) {
     printf("%s\n", "Let the discussion begin");
 }
-void commentate() {
-    printf("%s\n", "Commentator #0 generates answer, position in queue: 0");
+void commentate(void * arg) {
+    //TODO: Position in Queue
+    printf("Commentator #%d generates answer, position in queue: 0\n",(int *)arg);
 } 
 int main(int argc, char *argv[]){
 
-  //Commentator Count
+  //Init
+  //Get Commentator Count
   int N;
 
   if( argc == 2 ) {
@@ -67,15 +69,16 @@ int main(int argc, char *argv[]){
     return 1;
   }
 
+  //Panel
   int t =0;
   while(1) {
-    pthread_create(&moderator, NULL, moderate, NULL);
-    for (t=0;t<N;t++){
-      pthread_create(&commentator[t], NULL, commentate, NULL);
+    pthread_create(&moderator, NULL, moderate, "moderator");
+    for (t=1;t<=N;t++){
+      pthread_create(&commentator[t], NULL, commentate, t);
     }
 
     pthread_join(moderator, NULL);
-    for (t=0;t<N;t++){
+    for (t=1;t<=N;t++){
       pthread_join(commentator[t], NULL);
     }
   }
