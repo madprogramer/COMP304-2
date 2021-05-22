@@ -5,6 +5,7 @@
 #include <time.h>
 #define NULL  __DARWIN_NULL
 #define __DARWIN_NULL ((void *)0)
+#define MAXCOMMENTATORS 100
  /****************************************************************************** 
   pthread_sleep takes an integer number of seconds to pause the current thread 
   original by Yingwu Zhu
@@ -12,7 +13,7 @@
   *****************************************************************************/
 
 pthread_t moderator;
-pthread_t commentator;
+pthread_t commentator[MAXCOMMENTATORS];
 pthread_mutex_t mutex;
 pthread_cond_t conditionvar;
 struct timespec timetoexpire;
@@ -52,13 +53,32 @@ void moderate() {
 void commentate() {
     printf("%s\n", "Commentator #0 generates answer, position in queue: 0");
 } 
-int main(){
-    //while(1) {
+int main(int argc, char *argv[]){
 
-        pthread_create(&moderator, NULL, moderate, NULL);
-        pthread_create(&commentator, NULL, commentate, NULL);
-        pthread_join(moderator, NULL);
-        pthread_join(commentator, NULL);
+  //Commentator Count
+  int N;
 
-    //}
+  if( argc == 2 ) {
+      printf("The argument supplied is %s\n", argv[1]);
+      sscanf(argv[1], "%d", &N);
+  }
+  else{
+    printf("Error: Missing count of commentators!\n");
+    return 1;
+  }
+
+  int t =0;
+  while(1) {
+    pthread_create(&moderator, NULL, moderate, NULL);
+    for (t=0;t<N;t++){
+      pthread_create(&commentator[t], NULL, commentate, NULL);
+    }
+
+    pthread_join(moderator, NULL);
+    for (t=0;t<N;t++){
+      pthread_join(commentator[t], NULL);
+    }
+  }
+
+  return 0;
 } 
