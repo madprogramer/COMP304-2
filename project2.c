@@ -86,6 +86,14 @@ void awaitDecisions(){
     decided[i] = 0;
 }
 
+void decide(int i){
+  decided[i-1] = 1;
+}
+
+int hasDecided(int i){
+  return decided[i-1];
+}
+
 //TIME VALS
 struct timeval start, current;
 
@@ -133,7 +141,7 @@ void commentate(void * arg) {
   do{
     //Wait if decided
     //TODO: ABSTRACTIFY
-    while(decided[id-1]);
+    while(hasDecided(id));
     //Commentator Turn
     sem_wait(&cTurn);
     int yes=0;
@@ -143,7 +151,7 @@ void commentate(void * arg) {
       yes=1;
     }
     //TODO: ABSTRACTIFY
-    decided[id-1] = 1;
+    decide(id);
     if (!yes) continue;
     /*if (!yes) {
       //signal(mTurn);
