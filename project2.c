@@ -7,6 +7,7 @@
 #define __DARWIN_NULL ((void *)0)
 #define MAXCOMMENTATORS 400
 #define CURARG 1+2*i
+#define PROBABILITY_RESOLUTION 10000
  /****************************************************************************** 
   pthread_sleep takes an integer number of seconds to pause the current thread 
   original by Yingwu Zhu
@@ -40,6 +41,12 @@ int pthread_sleep (int seconds)
    return res;
 
 }
+
+//GLOBAL VARIABLES
+int N,Q,time_int;
+double T,P,B;
+time_t seed;
+
 //GLOBAL QUEUE
 int QUEUE[MAXCOMMENTATORS];
 //head refers to NEXT push, tail refers CURRENT pop
@@ -65,13 +72,13 @@ int decided[MAXCOMMENTATORS];
 
 //returns 1 if all threads have decided, 0 otherwise
 int everyoneDecided(){
-  for (int i = 0; i < MAXCOMMENTATORS; ++i)
+  for (int i = 0; i < N; ++i)
     if (!decided[i]) return 0;
   return 1;
 }
 
 void awaitDecisions(){
-  for (int i = 0; i < MAXCOMMENTATORS; ++i)
+  for (int i = 0; i < N; ++i)
     decided[i] = 0;
 }
 
@@ -100,7 +107,14 @@ void moderate(void * arg) {
 }
 void commentate(void * arg) {
     int id = (int *)arg;
+    int yes=0;
+
     //Decide on whether or not to answer
+    if( rand()%PROBABILITY_RESOLUTION < P*PROBABILITY_RESOLUTION ){
+      yes=1;
+    }
+    decided[id-1] = 1;
+    if (!yes) return;
 
     //TODO: LOCK QUEUE
     //Position in Queue
@@ -114,12 +128,10 @@ void commentate(void * arg) {
 
 int main(int argc, char *argv[]){
 
-  //Init
-  int N=0,Q=0,time_int=0;
-  double T=0,P=0,B=0;
-  time_t seed=NULL;
-
   gettimeofday(&start, NULL);
+  N=0,Q=0,time_int=0;
+  T=0,P=0,B=0;
+  seed=NULL;
 
   if( argc == 9 || argc == 11 || argc == 13) {
 
@@ -142,6 +154,7 @@ int main(int argc, char *argv[]){
       }
     }
 
+  //SEED TIME
   srand(seed);
 
   }
@@ -164,6 +177,9 @@ int main(int argc, char *argv[]){
 
     //Wait for all threads to make a decision
     while(!everyoneDecided());
+
+    //Wait for queue to empty
+    //while(qsize!=0);
 
     for (n=1;n<=N;n++){
       pthread_join(commentator[n], NULL);
