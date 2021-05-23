@@ -12,11 +12,6 @@
   original by Yingwu Zhu
   updated by Muhammed Nufail Farooqi
   *****************************************************************************/
-
-pthread_t moderator;
-pthread_t commentator[MAXCOMMENTATORS];
-struct timeval start, current;
-
 int pthread_sleep (int seconds)
 {
    pthread_mutex_t mutex;
@@ -45,7 +40,7 @@ int pthread_sleep (int seconds)
    return res;
 
 }
-
+//GLOBAL QUEUE
 int QUEUE[MAXCOMMENTATORS];
 //head refers to NEXT push, tail refers CURRENT pop
 int head=0,tail=0,qsize=0;
@@ -63,7 +58,25 @@ int pop(){
   tail%=MAXCOMMENTATORS;
   return top;
 }
+//END
 
+//DETERMINE IF ALL COMMENTATORS HAVE DECIDED WHETHER OR NOT TO ANSWER
+int decided[MAXCOMMENTATORS];
+
+//returns 1 if all threads have decided, 0 otherwise
+int everyoneDecided(){
+  for (int i = 0; i < MAXCOMMENTATORS; ++i)
+    if (!decided[i]) return 0;
+  return 1;
+}
+
+void awaitDecisions(){
+  for (int i = 0; i < MAXCOMMENTATORS; ++i)
+    decided[i] = 0;
+}
+
+//TIME VALS
+struct timeval start, current;
 
 void logtime(){
   gettimeofday(&current, NULL);
@@ -75,6 +88,10 @@ void logtime(){
   printf("[%02d:%02d.%03d]\n",min,sec,microsec);
 }
 
+//PTHREADS
+pthread_t moderator;
+pthread_t commentator[MAXCOMMENTATORS];
+
 void moderate(void * arg) {
     logtime();printf("Moderator asks question %d\n",(int *)arg);
     //QUESTION ASKED SIGNAL!
@@ -83,6 +100,8 @@ void moderate(void * arg) {
 }
 void commentate(void * arg) {
     int id = (int *)arg;
+    //Decide on whether or not to answer
+
     //TODO: LOCK QUEUE
     //Position in Queue
     int pos = push(id);
@@ -92,19 +111,21 @@ void commentate(void * arg) {
     //t_speak
     //DIE
 } 
+
 int main(int argc, char *argv[]){
 
   //Init
-  int N=0,Q=0;
-  double T=0,P=0;
+  int N=0,Q=0,time_int=0;
+  double T=0,P=0,B=0;
+  time_t seed=NULL;
 
   gettimeofday(&start, NULL);
 
-  if( argc == 9 ) {
+  if( argc == 9 || argc == 11 || argc == 13) {
 
     //Parse Arguments
-    int i=0;
-    for(;i<4;i++){
+    int i=0, argcc = argc/2;
+    for(;i<argcc;i++){
       if(!strcmp(argv[CURARG], "-n"))
         sscanf(argv[CURARG+1], "%d", &N);
       if(!strcmp(argv[CURARG], "-q"))
@@ -112,9 +133,16 @@ int main(int argc, char *argv[]){
       if(!strcmp(argv[CURARG], "-t"))
         sscanf(argv[CURARG+1], "%lf", &T);
       if(!strcmp(argv[CURARG], "-p"))
-        //printf("%s\n", argv[CURARG+1]);
         sscanf(argv[CURARG+1], "%lf", &P);
+      if(!strcmp(argv[CURARG], "-b"))
+        sscanf(argv[CURARG+1], "%lf", &B);
+      if(!strcmp(argv[CURARG], "-seed")){
+        sscanf(argv[CURARG+1], "%d", &time_int);
+        seed=time_int;
+      }
     }
+
+  srand(seed);
 
   }
   else{
@@ -126,10 +154,16 @@ int main(int argc, char *argv[]){
   int n, q;
   for(q=1;q<=Q;q++) {
 
+    //Anticipate New Responses
+    awaitDecisions();
+
     pthread_create(&moderator, NULL, moderate, q);
     for (n=1;n<=N;n++){
       pthread_create(&commentator[n], NULL, commentate, n);
     }
+
+    //Wait for all threads to make a decision
+    while(!everyoneDecided());
 
     for (n=1;n<=N;n++){
       pthread_join(commentator[n], NULL);
