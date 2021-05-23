@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <semaphore.h>
+#include <signal.h>
 #define NULL  __DARWIN_NULL
 #define __DARWIN_NULL ((void *)0)
 #define MAXCOMMENTATORS 400
@@ -15,6 +16,7 @@
   updated by Muhammed Nufail Farooqi
   *****************************************************************************/
 pthread_mutex_t PANELMUTEX;
+pthread_cond_t NEXTSPEAKER[MAXCOMMENTATORS];
 sem_t cTurn;
 
 int pthread_sleep (int seconds)
@@ -52,19 +54,23 @@ double T,P,B;
 time_t seed;
 
 //GLOBAL QUEUE
-int QUEUE[MAXCOMMENTATORS];
+//int QUEUE[MAXCOMMENTATORS];
+pthread_t QUEUE[MAXCOMMENTATORS];
 //head refers to NEXT push, tail refers CURRENT pop
 int head=0,tail=0,qsize=0;
 
 int push(int tid){
-  qsize++;
+//int push(pthread_t tid){
+  //qsize++;
   QUEUE[head++] = tid;
   head%=MAXCOMMENTATORS;
-  return qsize;
+  return qsize++;
 }
 
+//pthread_t pop(){
 int pop(){
   qsize--;
+  //pthread_t top = QUEUE[tail++];
   int top = QUEUE[tail++];
   tail%=MAXCOMMENTATORS;
   return top;
@@ -87,11 +93,11 @@ void awaitDecisions(){
 }
 
 void decide(int i){
-  decided[i-1] = 1;
+  decided[i] = 1;
 }
 
 int hasDecided(int i){
-  return decided[i-1];
+  return decided[i];
 }
 
 //TIME VALS
@@ -104,7 +110,7 @@ void logtime(){
   int sec=(current.tv_sec-start.tv_sec)%60;
   long long int microsec=(current.tv_usec-start.tv_usec)/1000;
 
-  printf("[%02d:%02d.%03d] ",min,sec,microsec);
+  printf("[%02d:%02d.%03lld] ",min,sec,microsec);
 }
 
 //PTHREADS
@@ -114,7 +120,8 @@ pthread_t commentator[MAXCOMMENTATORS];
 void moderate(void * arg) {
   
   //ignore arg for now, Q is global
-  int n, q;
+  int n, q, next;
+  pthread_t answerer;
   for(q=1;q<=Q;q++) {
     //Anticipate New Responses
     //sem_wait(&mTurn);
@@ -128,7 +135,15 @@ void moderate(void * arg) {
     while(!everyoneDecided());
     //Wait for queue to empty
     while(qsize!=0){
-      //TODO: Pop Front of Queue and Signal it
+      //Pop Front of Queue and Signal it
+      pthread_mutex_lock(&PANELMUTEX);
+      //answerer = pop();
+      //pthread_kill(answerer,SIGUSR1);
+
+      next = pop();
+      pthread_cond_signal(&NEXTSPEAKER[next]);
+
+      pthread_mutex_unlock(&PANELMUTEX);
     }
 
   }
@@ -137,10 +152,12 @@ void moderate(void * arg) {
 
 }
 void commentate(void * arg) {
+
   int id = (int *)arg;
+  //sigset_t   set;
+
   do{
     //Wait if decided
-    //TODO: ABSTRACTIFY
     while(hasDecided(id));
     //Commentator Turn
     sem_wait(&cTurn);
@@ -150,7 +167,6 @@ void commentate(void * arg) {
     if( rand()%PROBABILITY_RESOLUTION < P*PROBABILITY_RESOLUTION ){
       yes=1;
     }
-    //TODO: ABSTRACTIFY
     decide(id);
     if (!yes) continue;
     /*if (!yes) {
@@ -160,13 +176,30 @@ void commentate(void * arg) {
 
     //LOCK&UNLOCK QUEUE
     pthread_mutex_lock(&PANELMUTEX);
+    //int pos = push(pthread_self());
     int pos = push(id);
     pthread_mutex_unlock(&PANELMUTEX);
 
     logtime();printf("Commentator #%d generates answer, position in queue: %d\n",id,pos);
-    //TODO: WAIT FOR TURN TO SPEAK
-    //TODO: WAKE UP
+    
+    //WAIT FOR TURN TO SPEAK
+    //sigemptyset(&set);
+    pthread_mutex_lock (&PANELMUTEX);
+    //WAKE UP
+    pthread_cond_wait(&NEXTSPEAKER[id], &PANELMUTEX);
+    pthread_mutex_unlock (&PANELMUTEX);
+    /*if(sigaddset(&set, SIGUSR1) == -1) {
+    perror("Sigaddset error");
+    pthread_exit((void *)1);
+    }
+
+    if(sigwait(&set,(void *) 0) ) {
+        perror("Sigwait error");
+        pthread_exit((void *)2);
+    } */
+    logtime();printf("Commentator #%d's turn to speak for ... seconds\n",id);
     //TODO: TALK FOR t_speak
+    //TODO: FINISH SPEAKING AFTER t_speak
   }while(1);
 } 
 
@@ -221,13 +254,18 @@ int main(int argc, char *argv[]){
   //awaitDecisions();
   //pthread_create(&moderator, NULL, moderate, Q);
   pthread_create(&moderator, NULL, moderate, "Moderator");
-  for (n=1;n<=N;n++){
+  for (n=0;n<N;n++){
     pthread_create(&commentator[n], NULL, commentate, n);
+    if(pthread_cond_init(&NEXTSPEAKER[n],NULL))
+    {
+      return -1;
+    }
   }
 
   //Tie up loose ends
-  for (n=1;n<=N;n++){
+  for (n=0;n<N;n++){
       pthread_join(commentator[n], NULL);
+      pthread_cond_destroy(&NEXTSPEAKER[n]);
   }
   pthread_join(moderator, NULL);
 
