@@ -17,7 +17,7 @@
   *****************************************************************************/
 pthread_mutex_t PANELMUTEX;
 pthread_cond_t NEXTSPEAKER[MAXCOMMENTATORS];
-sem_t cTurn;
+sem_t cTurn, answerDone;
 
 int pthread_sleep (int seconds)
 {
@@ -142,8 +142,10 @@ void moderate(void * arg) {
 
       next = pop();
       pthread_cond_signal(&NEXTSPEAKER[next]);
-
       pthread_mutex_unlock(&PANELMUTEX);
+
+      //Wait on this thread
+      sem_wait(&answerDone);
     }
 
   }
@@ -198,13 +200,14 @@ void commentate(void * arg) {
         perror("Sigwait error");
         pthread_exit((void *)2);
     } */
-
-
     double t = 1 + (rand() / (RAND_MAX / (T-1)));
 
     logtime();printf("Commentator #%d's turn to speak for %f seconds\n",id,t);
     //TODO: TALK FOR t_speak
+    pthread_sleep(t);
+    sem_post(&answerDone);
     //TODO: FINISH SPEAKING AFTER t_speak
+    logtime();printf(" Commentator #%d finished speaking\n",id,t);
   }while(1);
 } 
 
@@ -250,10 +253,15 @@ int main(int argc, char *argv[]){
   {
     return -1;
   }
-  //Note: Semaphore takes a count of N-1
+
+  //Note: Semaphore takes a count of N, but inited to 0
   if(sem_init(&cTurn, 0, 0)){
     return -1;
   }
+  if(sem_init(&answerDone, 0, 0)){
+    return -1;
+  }
+
   //Set up the Q&A Panel
   int n;
   //awaitDecisions();
@@ -278,6 +286,7 @@ int main(int argc, char *argv[]){
   //Destroy Globals
   pthread_mutex_destroy(&PANELMUTEX);
   sem_destroy(&cTurn);
+  sem_destroy(&answerDone);
 
   return 0;
 } 
