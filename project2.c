@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
+#include <semaphore.h>
 #define NULL  __DARWIN_NULL
 #define __DARWIN_NULL ((void *)0)
 #define MAXCOMMENTATORS 400
@@ -14,6 +15,7 @@
   updated by Muhammed Nufail Farooqi
   *****************************************************************************/
 pthread_mutex_t PANELMUTEX;
+sem_t cTurn;
 
 int pthread_sleep (int seconds)
 {
@@ -92,7 +94,7 @@ void logtime(){
 
   int min=(current.tv_sec-start.tv_sec)/60;
   int sec=(current.tv_sec-start.tv_sec)%60;
-  int microsec=(current.tv_usec-start.tv_usec)/1000;
+  long long int microsec=(current.tv_usec-start.tv_usec)/1000;
 
   printf("[%02d:%02d.%03d] ",min,sec,microsec);
 }
@@ -106,32 +108,47 @@ void moderate(void * arg) {
   //ignore arg for now, Q is global
   int n, q;
   for(q=1;q<=Q;q++) {
-
-    //for (n=1;n<=N;n++);
-    logtime();printf("Moderator asks question %d\n",q);
     //Anticipate New Responses
+    //sem_wait(&mTurn);
+    logtime();printf("Moderator asks question %d\n",q);
     awaitDecisions();
 
-    //QUESTION ASKED SIGNAL!
+    //Signal all commentator threads
+    for (n=1;n<=N;n++) 
+      sem_post(&cTurn);
     //Wait for all threads to make a decision
     while(!everyoneDecided());
     //Wait for queue to empty
-    while(qsize!=0);
-    //Wait for answers
+    while(qsize!=0){
+      //TODO: Pop Front of Queue and Signal it
+    }
 
   }
 
+  //TODO: KILL ALL COMMENTATORS?
+
 }
 void commentate(void * arg) {
-    int id = (int *)arg;
+  int id = (int *)arg;
+  do{
+    //Wait if decided
+    //TODO: ABSTRACTIFY
+    while(decided[id-1]);
+    //Commentator Turn
+    sem_wait(&cTurn);
     int yes=0;
 
     //Decide on whether or not to answer
     if( rand()%PROBABILITY_RESOLUTION < P*PROBABILITY_RESOLUTION ){
       yes=1;
     }
+    //TODO: ABSTRACTIFY
     decided[id-1] = 1;
-    if (!yes) return;
+    if (!yes) continue;
+    /*if (!yes) {
+      //signal(mTurn);
+      continue;
+    }*/
 
     //LOCK&UNLOCK QUEUE
     pthread_mutex_lock(&PANELMUTEX);
@@ -139,10 +156,10 @@ void commentate(void * arg) {
     pthread_mutex_unlock(&PANELMUTEX);
 
     logtime();printf("Commentator #%d generates answer, position in queue: %d\n",id,pos);
-    //TODO: WAIT
+    //TODO: WAIT FOR TURN TO SPEAK
     //TODO: WAKE UP
-    //t_speak
-    //DIE
+    //TODO: TALK FOR t_speak
+  }while(1);
 } 
 
 int main(int argc, char *argv[]){
@@ -187,9 +204,15 @@ int main(int argc, char *argv[]){
   {
     return -1;
   }
+  //Note: Semaphore takes a count of N-1
+  if(sem_init(&cTurn, 0, 0)){
+    return -1;
+  }
   //Set up the Q&A Panel
   int n;
-  pthread_create(&moderator, NULL, moderate, Q);
+  //awaitDecisions();
+  //pthread_create(&moderator, NULL, moderate, Q);
+  pthread_create(&moderator, NULL, moderate, "Moderator");
   for (n=1;n<=N;n++){
     pthread_create(&commentator[n], NULL, commentate, n);
   }
@@ -200,8 +223,10 @@ int main(int argc, char *argv[]){
   }
   pthread_join(moderator, NULL);
 
+
   //Destroy Globals
   pthread_mutex_destroy(&PANELMUTEX);
+  sem_destroy(&cTurn);
 
   return 0;
 } 
