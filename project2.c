@@ -15,10 +15,6 @@
 
 pthread_t moderator;
 pthread_t commentator[MAXCOMMENTATORS];
-/*pthread_mutex_t mutex;
-pthread_cond_t conditionvar;
-struct timespec timetoexpire;*/
-
 struct timeval start, current;
 
 int pthread_sleep (int seconds)
@@ -50,6 +46,25 @@ int pthread_sleep (int seconds)
 
 }
 
+int QUEUE[MAXCOMMENTATORS];
+//head refers to NEXT push, tail refers CURRENT pop
+int head=0,tail=0,qsize=0;
+
+int push(int tid){
+  qsize++;
+  QUEUE[head++] = tid;
+  head%=MAXCOMMENTATORS;
+  return qsize;
+}
+
+int pop(){
+  qsize--;
+  int top = QUEUE[tail++];
+  tail%=MAXCOMMENTATORS;
+  return top;
+}
+
+
 void logtime(){
   gettimeofday(&current, NULL);
 
@@ -67,11 +82,14 @@ void moderate(void * arg) {
     //Wait for answers
 }
 void commentate(void * arg) {
-    //TODO: Position in Queue
-
-    //WAIT
-    //WAKE UP
-    logtime();printf("Commentator #%d generates answer, position in queue: 0\n",(int *)arg);
+    int id = (int *)arg;
+    //TODO: LOCK QUEUE
+    //Position in Queue
+    int pos = push(id);
+    logtime();printf("Commentator #%d generates answer, position in queue: %d\n",id,pos);
+    //TODO: WAIT
+    //TODO: WAKE UP
+    //t_speak
     //DIE
 } 
 int main(int argc, char *argv[]){
