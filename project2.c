@@ -19,6 +19,8 @@ pthread_t commentator[MAXCOMMENTATORS];
 pthread_cond_t conditionvar;
 struct timespec timetoexpire;*/
 
+struct timeval start, current;
+
 int pthread_sleep (int seconds)
 {
    pthread_mutex_t mutex;
@@ -48,8 +50,18 @@ int pthread_sleep (int seconds)
 
 }
 
+void logtime(){
+  gettimeofday(&current, NULL);
+
+  int min=(current.tv_sec-start.tv_sec)/60;
+  int sec=(current.tv_sec-start.tv_sec)%60;
+  int microsec=(current.tv_usec-start.tv_usec)/1000;
+
+  printf("[%02d:%02d.%03d]\n",min,sec,microsec);
+}
+
 void moderate(void * arg) {
-    printf("Moderator asks question %d\n",(int *)arg);
+    logtime();printf("Moderator asks question %d\n",(int *)arg);
     //QUESTION ASKED SIGNAL!
 
     //Wait for answers
@@ -59,7 +71,7 @@ void commentate(void * arg) {
 
     //WAIT
     //WAKE UP
-    printf("Commentator #%d generates answer, position in queue: 0\n",(int *)arg);
+    logtime();printf("Commentator #%d generates answer, position in queue: 0\n",(int *)arg);
     //DIE
 } 
 int main(int argc, char *argv[]){
@@ -67,6 +79,8 @@ int main(int argc, char *argv[]){
   //Init
   int N=0,Q=0;
   double T=0,P=0;
+
+  gettimeofday(&start, NULL);
 
   if( argc == 9 ) {
 
