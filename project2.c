@@ -164,7 +164,8 @@ void commentate(void * arg) {
     int yes=0;
 
     //Decide on whether or not to answer
-    if( rand()%PROBABILITY_RESOLUTION < P*PROBABILITY_RESOLUTION ){
+    //if( rand()%PROBABILITY_RESOLUTION < P*PROBABILITY_RESOLUTION ){
+    if( (1.0*rand())/RAND_MAX < P ){
       yes=1;
     }
     decide(id);
@@ -197,7 +198,11 @@ void commentate(void * arg) {
         perror("Sigwait error");
         pthread_exit((void *)2);
     } */
-    logtime();printf("Commentator #%d's turn to speak for ... seconds\n",id);
+
+
+    double t = 1 + (rand() / (RAND_MAX / (T-1)));
+
+    logtime();printf("Commentator #%d's turn to speak for %f seconds\n",id,t);
     //TODO: TALK FOR t_speak
     //TODO: FINISH SPEAKING AFTER t_speak
   }while(1);
