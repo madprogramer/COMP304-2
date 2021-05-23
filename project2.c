@@ -13,6 +13,8 @@
   original by Yingwu Zhu
   updated by Muhammed Nufail Farooqi
   *****************************************************************************/
+pthread_mutex_t PANELMUTEX;
+
 int pthread_sleep (int seconds)
 {
    pthread_mutex_t mutex;
@@ -92,7 +94,7 @@ void logtime(){
   int sec=(current.tv_sec-start.tv_sec)%60;
   int microsec=(current.tv_usec-start.tv_usec)/1000;
 
-  printf("[%02d:%02d.%03d]\n",min,sec,microsec);
+  printf("[%02d:%02d.%03d] ",min,sec,microsec);
 }
 
 //PTHREADS
@@ -100,10 +102,25 @@ pthread_t moderator;
 pthread_t commentator[MAXCOMMENTATORS];
 
 void moderate(void * arg) {
-    logtime();printf("Moderator asks question %d\n",(int *)arg);
-    //QUESTION ASKED SIGNAL!
+  
+  //ignore arg for now, Q is global
+  int n, q;
+  for(q=1;q<=Q;q++) {
 
+    //for (n=1;n<=N;n++);
+    logtime();printf("Moderator asks question %d\n",q);
+    //Anticipate New Responses
+    awaitDecisions();
+
+    //QUESTION ASKED SIGNAL!
+    //Wait for all threads to make a decision
+    while(!everyoneDecided());
+    //Wait for queue to empty
+    while(qsize!=0);
     //Wait for answers
+
+  }
+
 }
 void commentate(void * arg) {
     int id = (int *)arg;
@@ -116,9 +133,11 @@ void commentate(void * arg) {
     decided[id-1] = 1;
     if (!yes) return;
 
-    //TODO: LOCK QUEUE
-    //Position in Queue
+    //LOCK&UNLOCK QUEUE
+    pthread_mutex_lock(&PANELMUTEX);
     int pos = push(id);
+    pthread_mutex_unlock(&PANELMUTEX);
+
     logtime();printf("Commentator #%d generates answer, position in queue: %d\n",id,pos);
     //TODO: WAIT
     //TODO: WAKE UP
@@ -128,6 +147,7 @@ void commentate(void * arg) {
 
 int main(int argc, char *argv[]){
 
+  //INIT
   gettimeofday(&start, NULL);
   N=0,Q=0,time_int=0;
   T=0,P=0,B=0;
@@ -156,36 +176,32 @@ int main(int argc, char *argv[]){
 
   //SEED TIME
   srand(seed);
-
   }
-  else{
+  else
+  {
     printf("Error: Missing count of commentators!\n");
     return 1;
   }
 
-  //Panel
-  int n, q;
-  for(q=1;q<=Q;q++) {
-
-    //Anticipate New Responses
-    awaitDecisions();
-
-    pthread_create(&moderator, NULL, moderate, q);
-    for (n=1;n<=N;n++){
-      pthread_create(&commentator[n], NULL, commentate, n);
-    }
-
-    //Wait for all threads to make a decision
-    while(!everyoneDecided());
-
-    //Wait for queue to empty
-    //while(qsize!=0);
-
-    for (n=1;n<=N;n++){
-      pthread_join(commentator[n], NULL);
-    }
-    pthread_join(moderator, NULL);
+  if(pthread_mutex_init(&PANELMUTEX,NULL))
+  {
+    return -1;
   }
+  //Set up the Q&A Panel
+  int n;
+  pthread_create(&moderator, NULL, moderate, Q);
+  for (n=1;n<=N;n++){
+    pthread_create(&commentator[n], NULL, commentate, n);
+  }
+
+  //Tie up loose ends
+  for (n=1;n<=N;n++){
+      pthread_join(commentator[n], NULL);
+  }
+  pthread_join(moderator, NULL);
+
+  //Destroy Globals
+  pthread_mutex_destroy(&PANELMUTEX);
 
   return 0;
 } 
