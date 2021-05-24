@@ -45,10 +45,10 @@ int pthread_sleep(double seconds){
 
 pthread_mutex_t PANELMUTEX;
 pthread_cond_t NEXTSPEAKER[MAXCOMMENTATORS];
-sem_t cTurn, answerDone;
+sem_t cTurn, answerDone, watchmanTurn;
 
 //GLOBAL VARIABLES
-int N,Q,time_int,debate_over;
+int N,Q,time_int,debate_over,current_speaker;
 double T,P,B;
 time_t seed;
 
@@ -115,6 +115,7 @@ void logtime(){
 //PTHREADS
 pthread_t moderator;
 pthread_t commentator[MAXCOMMENTATORS];
+pthread_t watchman;
 
 void moderate(void * arg) {
   
@@ -138,8 +139,8 @@ void moderate(void * arg) {
       pthread_mutex_lock(&PANELMUTEX);
       //answerer = pop();
       //pthread_kill(answerer,SIGUSR1);
-
       next = pop();
+      current_speaker=next;
       pthread_cond_signal(&NEXTSPEAKER[next]);
       pthread_mutex_unlock(&PANELMUTEX);
 
@@ -219,11 +220,26 @@ void commentate(void * arg) {
   }while(1);
 } 
 
+void watch(void * arg){
+  do{
+    
+    sem_wait(&watchmanTurn);
+    if(debate_over){
+      pthread_exit(NULL);
+    }
+
+    logtime();printf("Breaking news!\n");
+    logtime();printf("Current Speaker: %d\n",current_speaker);
+
+  }
+  while(1);
+}
+
 int main(int argc, char *argv[]){
 
   //INIT
   gettimeofday(&start, NULL);
-  N=0,Q=0,time_int=0;
+  N=0,Q=0,time_int=0,current_speaker=-1;
   T=0,P=0,B=0;
   seed=NULL;
   debate_over=0;
@@ -270,6 +286,9 @@ int main(int argc, char *argv[]){
   if(sem_init(&answerDone, 0, 0)){
     return -1;
   }
+  if(sem_init(&watchmanTurn, 0, 0)){
+    return -1;
+  }
 
   //Set up the Q&A Panel
   int n;
@@ -283,19 +302,23 @@ int main(int argc, char *argv[]){
       return -1;
     }
   }
+  pthread_create(&watchman, NULL, watch, "Watchman");
 
   //Wait until debate over to generate breaking news)
   do{
 
     if( (1.0*rand())/RAND_MAX < B ){
-      logtime();printf("Breaking news!\n");
+      sem_post(&watchmanTurn);
     }
 
     //Sleep for 1 second
     pthread_sleep(1); 
   }while(!debate_over );
+  //Wake up the watchman when the show is over
+  sem_post(&watchmanTurn);
 
   //Tie up loose ends
+  pthread_join(watchman, NULL);
   for (n=0;n<N;n++){
       pthread_join(commentator[n], NULL);
       pthread_cond_destroy(&NEXTSPEAKER[n]);
