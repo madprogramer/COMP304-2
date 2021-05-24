@@ -48,7 +48,7 @@ pthread_cond_t NEXTSPEAKER[MAXCOMMENTATORS];
 sem_t cTurn, answerDone;
 
 //GLOBAL VARIABLES
-int N,Q,time_int;
+int N,Q,time_int,debate_over;
 double T,P,B;
 time_t seed;
 
@@ -149,7 +149,9 @@ void moderate(void * arg) {
 
   }
 
-  //TODO: KILL ALL COMMENTATORS?
+  //KILL ALL COMMENTATORS AND STEP DOWN
+  debate_over=1;
+  pthread_exit(NULL);
 
 }
 void commentate(void * arg) {
@@ -158,8 +160,15 @@ void commentate(void * arg) {
   //sigset_t   set;
 
   do{
+
     //Wait if decided
-    while(hasDecided(id));
+    while( !debate_over && hasDecided(id));
+
+    //Check if debate is over
+    if(debate_over){
+      pthread_exit(NULL);
+    }
+
     //Commentator Turn
     sem_wait(&cTurn);
     int yes=0;
@@ -202,11 +211,11 @@ void commentate(void * arg) {
     double t = 1 + (rand() / (RAND_MAX / (T-1)));
 
     logtime();printf("Commentator #%d's turn to speak for %f seconds\n",id,t);
-    //TODO: TALK FOR t_speak
+    //TALK FOR t_speak
     pthread_sleep(t);
     sem_post(&answerDone);
-    //TODO: FINISH SPEAKING AFTER t_speak
-    logtime();printf(" Commentator #%d finished speaking\n",id,t);
+    //FINISH SPEAKING AFTER t_speak
+    logtime();printf("Commentator #%d finished speaking\n",id,t);
   }while(1);
 } 
 
@@ -217,6 +226,7 @@ int main(int argc, char *argv[]){
   N=0,Q=0,time_int=0;
   T=0,P=0,B=0;
   seed=NULL;
+  debate_over=0;
 
   if( argc == 9 || argc == 11 || argc == 13) {
 
