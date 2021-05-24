@@ -284,13 +284,23 @@ int main(int argc, char *argv[]){
     }
   }
 
+  //Wait until debate over to generate breaking news)
+  do{
+
+    if( (1.0*rand())/RAND_MAX < B ){
+      logtime();printf("Breaking news!\n");
+    }
+
+    //Sleep for 1 second
+    pthread_sleep(1); 
+  }while(!debate_over );
+
   //Tie up loose ends
   for (n=0;n<N;n++){
       pthread_join(commentator[n], NULL);
       pthread_cond_destroy(&NEXTSPEAKER[n]);
   }
   pthread_join(moderator, NULL);
-
 
   //Destroy Globals
   pthread_mutex_destroy(&PANELMUTEX);
