@@ -133,11 +133,16 @@ struct timeval start, current;
 void logtime(){
   gettimeofday(&current, NULL);
 
-  int min=(current.tv_sec-start.tv_sec)/60;
-  int sec=(current.tv_sec-start.tv_sec)%60;
-  long long int microsec=(current.tv_usec-start.tv_usec)/1000;
+  //long int microsec=(current.tv_usec-start.tv_usec)/10;
 
-  printf("[%02d:%02d.%03lld] ",min,sec,microsec);
+  long microsec = (current.tv_usec - start.tv_usec) / 1000;
+  long sec= current.tv_sec - start.tv_sec + ((microsec<0)?-1:0);
+  microsec = ((microsec<0)?1-microsec:microsec);
+
+  long min=sec/60;
+  sec=sec%(long)60;
+
+  printf("[%02ld:%02ld.%03ld] ",min,sec,microsec);
 }
 
 //PTHREADS
