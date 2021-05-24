@@ -36,21 +36,49 @@ int pthread_sleep(double seconds){
     //Upon successful completion, a value of zero shall be returned
     return res;
 }
+
 //OUR CODE STARTS HERE
+
 #include <semaphore.h>
 #include <signal.h>
+#include <errno.h>
 #define MAXCOMMENTATORS 400
 #define CURARG 1+2*i
 #define PROBABILITY_RESOLUTION 10000
 
-pthread_mutex_t PANELMUTEX;
-pthread_cond_t NEXTSPEAKER[MAXCOMMENTATORS];
-sem_t cTurn, answerDone, watchmanTurn;
+pthread_mutex_t PANELMUTEX, BREAKINGMUTEX;
+pthread_cond_t NEXTSPEAKER[MAXCOMMENTATORS], BREAKINGNEWS;
+sem_t cTurn, answerDone, watchmanTurn,breakingDone;
 
 //GLOBAL VARIABLES
 int N,Q,time_int,debate_over,current_speaker;
 double T,P,B;
 time_t seed;
+
+int pthread_sleep_controlled(double seconds){
+    //MODIFIED PTHREAD_SLEEP WHICH CHECKS THE GLOBAL COND BREAKINGMUTEX
+    pthread_mutex_t mutex;
+    if(pthread_mutex_init(&mutex,NULL)){
+        return -1;
+    }
+    struct timeval tp;
+    struct timespec timetoexpire;
+    // When to expire is an absolute time, so get the current time and add
+    // it to our delay time
+    gettimeofday(&tp, NULL);
+    long new_nsec = tp.tv_usec * 1000 + (seconds - (long)seconds) * 1e9;
+    timetoexpire.tv_sec = tp.tv_sec + (long)seconds + (new_nsec / (long)1e9);
+    timetoexpire.tv_nsec = new_nsec % (long)1e9;
+
+    pthread_mutex_lock(&mutex);
+    int res = pthread_cond_timedwait(&BREAKINGNEWS, &mutex, &timetoexpire);
+    pthread_mutex_unlock(&mutex);
+    pthread_mutex_destroy(&mutex);
+
+    //Upon successful completion, a value of zero shall be returned
+    return res;
+}
+
 
 //GLOBAL QUEUE
 //int QUEUE[MAXCOMMENTATORS];
@@ -129,7 +157,7 @@ void moderate(void * arg) {
     awaitDecisions();
 
     //Signal all commentator threads
-    for (n=1;n<=N;n++) 
+    for (n=0;n<N;n++) 
       sem_post(&cTurn);
     //Wait for all threads to make a decision
     while(!everyoneDecided());
@@ -146,6 +174,10 @@ void moderate(void * arg) {
 
       //Wait on this thread
       sem_wait(&answerDone);
+
+      //Wait for breaking news to end
+      pthread_mutex_lock (&BREAKINGMUTEX);
+      pthread_mutex_unlock (&BREAKINGMUTEX);
     }
 
   }
@@ -158,6 +190,7 @@ void moderate(void * arg) {
 void commentate(void * arg) {
 
   int id = (int *)arg;
+  int status;
   //sigset_t   set;
 
   do{
@@ -212,24 +245,39 @@ void commentate(void * arg) {
     double t = 1 + (rand() / (RAND_MAX / (T-1)));
 
     logtime();printf("Commentator #%d's turn to speak for %f seconds\n",id,t);
-    //TALK FOR t_speak
-    pthread_sleep(t);
+    //TALK FOR t_speak, interupt if breaking news reported
+    status = pthread_sleep_controlled(t);
+
+    //CHECK IF finished or not
+    if(status==ETIMEDOUT)
+    //if(status)
+      logtime(),printf("Commentator #%d finished speaking\n",id);
+    else
+      logtime(),printf("Commentator #%d is cut short due to breaking news\n",id);
     sem_post(&answerDone);
     //FINISH SPEAKING AFTER t_speak
-    logtime();printf("Commentator #%d finished speaking\n",id,t);
+    
   }while(1);
 } 
 
 void watch(void * arg){
   do{
-    
+
     sem_wait(&watchmanTurn);
     if(debate_over){
       pthread_exit(NULL);
     }
 
     logtime();printf("Breaking news!\n");
-    logtime();printf("Current Speaker: %d\n",current_speaker);
+    //logtime();printf("Current Speaker: %d\n",current_speaker);
+    //pthread_kill(commentator[current_speaker],SIGCONT);
+    pthread_mutex_lock (&BREAKINGMUTEX);
+    pthread_cond_signal(&BREAKINGNEWS);
+    //Wait 5 seconds
+    pthread_sleep(5);
+    logtime(),printf("Breaking news ends\n");
+    pthread_mutex_unlock (&BREAKINGMUTEX);
+    sem_post(&breakingDone);
 
   }
   while(1);
@@ -274,8 +322,13 @@ int main(int argc, char *argv[]){
     return 1;
   }
 
-  if(pthread_mutex_init(&PANELMUTEX,NULL))
-  {
+  if(pthread_mutex_init(&PANELMUTEX,NULL)){
+    return -1;
+  }
+  if(pthread_mutex_init(&BREAKINGMUTEX,NULL)){
+    return -1;
+  }
+  if(pthread_cond_init(&BREAKINGNEWS,NULL)){
     return -1;
   }
 
@@ -287,6 +340,9 @@ int main(int argc, char *argv[]){
     return -1;
   }
   if(sem_init(&watchmanTurn, 0, 0)){
+    return -1;
+  }
+  if(sem_init(&breakingDone, 0, 0)){
     return -1;
   }
 
@@ -307,12 +363,14 @@ int main(int argc, char *argv[]){
   //Wait until debate over to generate breaking news)
   do{
 
-    if( (1.0*rand())/RAND_MAX < B ){
-      sem_post(&watchmanTurn);
-    }
-
     //Sleep for 1 second
     pthread_sleep(1); 
+
+    if( (1.0*rand())/RAND_MAX < B ){
+      sem_post(&watchmanTurn);
+      sem_wait(&breakingDone);
+    }
+
   }while(!debate_over );
   //Wake up the watchman when the show is over
   sem_post(&watchmanTurn);
@@ -326,9 +384,13 @@ int main(int argc, char *argv[]){
   pthread_join(moderator, NULL);
 
   //Destroy Globals
-  pthread_mutex_destroy(&PANELMUTEX);
+  sem_destroy(&breakingDone);
+  sem_destroy(&watchmanTurn);
   sem_destroy(&cTurn);
   sem_destroy(&answerDone);
+  pthread_mutex_destroy(&PANELMUTEX);
+  pthread_mutex_destroy(&BREAKINGMUTEX);
+  pthread_cond_destroy(&BREAKINGNEWS);
 
   return 0;
 } 
